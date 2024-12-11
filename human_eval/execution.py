@@ -8,7 +8,11 @@ import multiprocessing
 import platform
 import signal
 import tempfile
+import threading
+import ctypes
+import time
 
+IS_WINDOWS = platform.system() == 'Windows'
 
 def check_correctness(problem: Dict, completion: str, timeout: float,
                       completion_id: Optional[int] = None) -> Dict:
@@ -21,9 +25,7 @@ def check_correctness(problem: Dict, completion: str, timeout: float,
     """
 
     def unsafe_execute():
-
         with create_tempdir():
-
             # These system calls are needed when cleaning up tempdir.
             import os
             import shutil
@@ -55,7 +57,7 @@ def check_correctness(problem: Dict, completion: str, timeout: float,
 # information on how OpenAI sandboxes its code, see the accompanying paper.
 # Once you have read this disclaimer and taken appropriate precautions, 
 # uncomment the following line and proceed at your own risk:
-#                         exec(check_program, exec_globals)
+                        exec(check_program, exec_globals)
                 result.append("passed")
             except TimeoutException:
                 result.append("timed out")
@@ -74,7 +76,10 @@ def check_correctness(problem: Dict, completion: str, timeout: float,
     p.start()
     p.join(timeout=timeout + 1)
     if p.is_alive():
-        p.kill()
+        if IS_WINDOWS:
+            p.terminate()
+        else:
+            p.kill()
 
     if not result:
         result.append("timed out")
@@ -86,18 +91,36 @@ def check_correctness(problem: Dict, completion: str, timeout: float,
         completion_id=completion_id,
     )
 
+def _windows_time_limit(seconds: float):
+    """Windows-specific timeout implementation using threading."""
+    timer = threading.Timer(seconds, lambda: ctypes.pythonapi.PyThreadState_SetAsyncExc(
+        threading.current_thread().ident, ctypes.py_object(TimeoutException)))
+    timer.start()
+    try:
+        yield
+    finally:
+        timer.cancel()
 
-@contextlib.contextmanager
-def time_limit(seconds: float):
+def _unix_time_limit(seconds: float):
+    """Unix-specific timeout implementation using SIGALRM."""
     def signal_handler(signum, frame):
         raise TimeoutException("Timed out!")
+    
+    old_handler = signal.signal(signal.SIGALRM, signal_handler)
     signal.setitimer(signal.ITIMER_REAL, seconds)
-    signal.signal(signal.SIGALRM, signal_handler)
     try:
         yield
     finally:
         signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, old_handler)
 
+@contextlib.contextmanager
+def time_limit(seconds: float):
+    """Cross-platform timeout context manager."""
+    if IS_WINDOWS:
+        yield from _windows_time_limit(seconds)
+    else:
+        yield from _unix_time_limit(seconds)
 
 @contextlib.contextmanager
 def swallow_io():
@@ -107,17 +130,14 @@ def swallow_io():
             with redirect_stdin(stream):
                 yield
 
-
 @contextlib.contextmanager
 def create_tempdir():
     with tempfile.TemporaryDirectory() as dirname:
         with chdir(dirname):
             yield dirname
 
-
 class TimeoutException(Exception):
     pass
-
 
 class WriteOnlyStringIO(io.StringIO):
     """ StringIO that throws an exception when it's read from """
@@ -135,10 +155,8 @@ class WriteOnlyStringIO(io.StringIO):
         """ Returns True if the IO object can be read. """
         return False
 
-
 class redirect_stdin(contextlib._RedirectStream):  # type: ignore
     _stream = 'stdin'
-
 
 @contextlib.contextmanager
 def chdir(root):
@@ -154,7 +172,6 @@ def chdir(root):
     finally:
         os.chdir(cwd)
 
-
 def reliability_guard(maximum_memory_bytes: Optional[int] = None):
     """
     This disables various destructive functions and prevents the generated code
@@ -168,12 +185,15 @@ def reliability_guard(maximum_memory_bytes: Optional[int] = None):
     with caution.
     """
 
-    if maximum_memory_bytes is not None:
-        import resource
-        resource.setrlimit(resource.RLIMIT_AS, (maximum_memory_bytes, maximum_memory_bytes))
-        resource.setrlimit(resource.RLIMIT_DATA, (maximum_memory_bytes, maximum_memory_bytes))
-        if not platform.uname().system == 'Darwin':
-            resource.setrlimit(resource.RLIMIT_STACK, (maximum_memory_bytes, maximum_memory_bytes))
+    if maximum_memory_bytes is not None and not IS_WINDOWS:
+        try:
+            import resource
+            resource.setrlimit(resource.RLIMIT_AS, (maximum_memory_bytes, maximum_memory_bytes))
+            resource.setrlimit(resource.RLIMIT_DATA, (maximum_memory_bytes, maximum_memory_bytes))
+            if not platform.uname().system == 'Darwin':
+                resource.setrlimit(resource.RLIMIT_STACK, (maximum_memory_bytes, maximum_memory_bytes))
+        except ImportError:
+            pass  # Skip if resource module is not available
 
     faulthandler.disable()
 

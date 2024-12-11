@@ -1,3 +1,6 @@
 tqdm
 fire
 numpy
+transformers>=4.37.0
+torch>=2.0.0
+accelerate>=0.27.0
