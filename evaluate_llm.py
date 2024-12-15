@@ -86,41 +86,41 @@ def generate_completion(prompt: str, model, tokenizer) -> str:
 
 def main():
     # Setup model and tokenizer
-    model, tokenizer = setup_model()
+    # model, tokenizer = setup_model()
     
-    # Read all problems from the HumanEval dataset
-    problems = read_problems()
+    # # Read all problems from the HumanEval dataset
+    # problems = read_problems()
     
-    # Generate samples - one completion per problem
-    samples = []
-    for task_id, problem in problems.items():
-        print(f"\nGenerating completion for {task_id}")
+    # # Generate samples - one completion per problem
+    # samples = []
+    # for task_id, problem in problems.items():
+    #     print(f"\nGenerating completion for {task_id}")
         
-        # Get the prompt from the problem
-        prompt = problem["prompt"]
+    #     # Get the prompt from the problem
+    #     prompt = problem["prompt"]
         
-        # Generate code completion using Phi-3-mini
-        completion = generate_completion(prompt, model, tokenizer)
-        print(f"Generated completion:\n{completion}")
+    #     # Generate code completion using Phi-3-mini
+    #     completion = generate_completion(prompt, model, tokenizer)
+    #     print(f"Generated completion:\n{completion}")
         
-        # Add to samples
-        sample = {
-            "task_id": task_id,
-            "completion": completion
-        }
-        samples.append(sample)
+    #     # Add to samples
+    #     sample = {
+    #         "task_id": task_id,
+    #         "completion": completion
+    #     }
+    #     samples.append(sample)
     
-    # Write samples to a jsonl file
+    # # Write samples to a jsonl file
     output_file = "samples.jsonl"
-    write_jsonl(output_file, samples)
-    print(f"\nSaved {len(samples)} samples to {output_file}")
+    # write_jsonl(output_file, samples)
+    # print(f"\nSaved {len(samples)} samples to {output_file}")
     
     # Evaluate the samples
     print("\nEvaluating samples...")
     results = evaluate_functional_correctness(
         sample_file=output_file,
         k=[1],  # Evaluate pass@k for k=1
-        n_workers=4,  # Number of parallel workers
+        n_workers=1,  # Number of parallel workers
         timeout=3.0  # Timeout for each evaluation in seconds
     )
     
