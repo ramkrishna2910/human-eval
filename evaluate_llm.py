@@ -120,8 +120,8 @@ def main():
     results = evaluate_functional_correctness(
         sample_file=output_file,
         k=[1],  # Evaluate pass@k for k=1
-        n_workers=1,  # Number of parallel workers
-        timeout=3.0  # Timeout for each evaluation in seconds
+        n_workers=4,  # Number of parallel workers
+        timeout=10.0  # Higher timeout for Windows compatibility
     )
     
     # Print results
