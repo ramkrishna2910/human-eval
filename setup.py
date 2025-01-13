@@ -7,7 +7,7 @@ from setuptools import setup, find_packages
 setup(
     name="human-eval-windows",
     py_modules=["human_eval"],
-    version="1.0.0",
+    version="1.0.4",
     description="Windows-compatible fork of OpenAI's human-eval",
     author="ramkrishna2910",
     author_email="ramkrishna2910@gmail.com",
